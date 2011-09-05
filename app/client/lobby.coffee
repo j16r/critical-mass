@@ -1,77 +1,103 @@
+MAX_PLAYERS = 4
+
 window.lobby_data =
-  userList: {}
   currentUser: null
 
 # The game lobby, where people go to find others to play games with
 exports.init = ->
 
-  # Periodically publish the list of users online
-  SS.events.on 'usersOnline', (users) ->
-    $.each users, (index, user) ->
-      if not lobby_data.userList[user]
-        lobby_data.userList[user] = true
-        $("<li>#{user}</li>").hide().appendTo('#userlist').slideDown()
-        $("<tr><td colspan='2' class='announce signon'>#{user} signed on</td></tr>").hide().appendTo('#chatlog').slideDown()
+  SS.server.app.init (username) ->
+    if username
+      revealMainScreen()
+      lobby_data.currentUser = username
+    else
+      revealLogin()
 
-  # Listen for new messages and append them to the screen
+  # SS Event handlers ##########################################################
+
+  # A user has signed on
+  SS.events.on 'userSignon', (username) ->
+    return if $("#userList li##{username}").length > 0
+
+    $("<li id='#{username}'>#{username}</li>").hide().appendTo('#userList').slideDown()
+    $("<tr><td colspan='2' class='announce signon'>#{username} signed on</td></tr>").hide().appendTo('#chatLog').slideDown()
+
+  # A user has signed off
+  SS.events.on 'userSignoff', (username) ->
+    console.log(username)
+    userLabel = $("#userList li##{username}")
+    return unless userLabel
+
+    userLabel.remove()
+    $("<tr><td colspan='2' class='announce signoff'>#{username} signed off</td></tr>").hide().appendTo('#chatLog').slideDown()
+
+  # a new chat message was sent
   SS.events.on 'newMessage', (message) ->
-    $("<tr><th>#{message['user']}</th><td>#{message['text']}</td></tr>").hide().appendTo('#chatlog').slideDown()
-    $('#channel').animate({scrollTop: $('#chatlog').height()}, 0)
+    $("<tr><th>#{message['user']}</th><td>#{message['text']}</td></tr>").hide().appendTo('#chatLog').slideDown()
+    $('#channel').animate({scrollTop: $('#chatLog').height()}, 0)
 
-  # Show the chat form and bind to the submit action
-  # Note how we're passing the message to the server-side method as the first argument
-  # If you wish to pass multiple variable use an object - e.g. {message: 'hi!', nickname: 'socket'}
+  # DOM Event handlers #########################################################
+
   $('#chatroom').show().submit ->
     message = $('#message').val()
-    if message.length > 0
-      SS.server.app.sendMessage message, (success) ->
-        if success
-          $('#message').val('')
-        else
-          alert('Unable to send message')
+    return unless message.length > 0
 
-  # User logins
+    SS.server.app.sendMessage message, (success) ->
+      if success
+        $('#message').val('')
+      else
+        alert('Unable to send message')
+
   $('#login').show().submit ->
     username = $('#username').val()
-    if username.length > 0
-      SS.server.app.login username, (success) ->
-        if success
-          revealMainScreen()
-          lobby_data.currentUser = username
+    return unless username.length > 0
 
-  $('#userlist li').live 'click',  ->
-    if $(this).text() isnt lobby_data.currentUser
+    SS.server.app.login username, (response) ->
+      $('#errors').children().remove()
+      $('#userList').children().remove()
 
-      if selectedUsers().length < 3
-        if $(this).hasClass('selected')
-          $(this).removeClass('selected')
-        else
-          $(this).addClass('selected')
-
-      if selectedUsers().length > 0
-        $('#startGame').addClass('active')
+      if response.success
+        console.log("Users online: ", response.usersOnline)
+        lobby_data.currentUser = username
+        $('#username').val('')
+        revealMainScreen()
+        console.log("Users online: ", response.usersOnline)
+        $.each response.usersOnline, (index, user) ->
+          $("<li id='#{user}'>#{user}</li>").hide().appendTo('#userList').slideDown()
       else
-        $('#startGame').removeClass('active')
+        $('#errors').append("<ul><li>#{response.message}</li></ul>")
+
+  $('#userList li').live 'click',  ->
+    return if $(this).text() is lobby_data.currentUser
+
+    if selectedUsers().length < (MAX_PLAYERS - 1)
+      $(this).toggleClass('selected')
+
+    if selectedUsers().length > 0
+      $('#startGame').addClass('active')
+    else
+      $('#startGame').removeClass('active')
 
   $('#startGame.active').live 'click', ->
     SS.server.app.offerGame lobby_data.currentUser, selectedUsers(), (success) ->
-      console.log('Game offered')
 
   $('#accept').live 'click', ->
     SS.server.app.acceptGame lobby_data.currentUser, (success) ->
-      console.log('Game accepted')
 
   $('#logout').click ->
     SS.server.app.logout (success) ->
-      if success
-        $('#main').hide()
-        $('#logout').hide()
-        $('#authentication').fadeIn()
+      if success then revealLogin()
+
+  # Functions #################################################################
+
+  revealLogin = ->
+    $('#main').hide()
+    $('#authentication').fadeIn()
 
   revealMainScreen = ->
-    $('#authentication').fadeOut()
-    $('#main').show()
+    $('#authentication').hide()
+    $('#main').fadeIn()
 
   selectedUsers = ->
-    $.map $('#userlist li.selected'), (li, index) ->
+    $.map $('#userList li.selected'), (li, index) ->
       $(li).text()

@@ -1,7 +1,20 @@
 # Server-side Code
 
 exports.actions =
-  
+
+  init: (cb) ->
+    username = @session.user_id
+    if username
+      R.get "user:#{username}", (err, data) =>
+        if data
+          cb data
+          @session.setUserId(username)
+          SS.publish.broadcast 'userSignon', username
+        else
+          cb false
+    else
+      cb false
+
   sendMessage: (message, cb) ->
     data = {user: @session.user['session']['user_id'], text: message}
     if message.length > 0
@@ -12,13 +25,19 @@ exports.actions =
 
   login: (username, cb) ->
     @session.authenticate 'login', username, (response) =>
-      @session.setUserId(username)
-      SS.users.online.now (users) ->
-        SS.publish.broadcast 'usersOnline', users
-      cb(response)
+      if response.success
+        SS.users.online.now (users) ->
+          cb({success: true, usersOnline: users})
+        @session.setUserId(username)
+        SS.publish.broadcast 'userSignon', username
+      else
+        cb(response)
 
   logout: (cb) ->
+    username = @session.user['session']['user_id']
+    R.del "user:#{username}"
     @session.user.logout(cb)
+    SS.publish.broadcast 'userSignoff', username
 
   offerGame: (host, players, cb) ->
     SS.publish.broadcast 'gameOffer', {host: host, players: players}

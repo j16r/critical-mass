@@ -6,9 +6,10 @@ html(lang = "en")
     title Critical Mass
   body
     #content
-      div#authentication
+      div#authentication(style = 'display:none')
         h1 Critical Mass
         form#login(onsubmit = 'return false')
+          div#errors
           label(for = 'username') Nickname:
           input(id = 'username', type = 'text', autocomplete = 'off')
 
@@ -31,11 +32,11 @@ html(lang = "en")
 
             div#channel
               table
-                tbody#chatlog
+                tbody#chatLog
 
             div#users
               h4 Players
-              ul#userlist
+              ul#userList
 
               div#menu
                 input#startGame(type ='submit', value='Start Game')
