@@ -1,15 +1,14 @@
 # Client-side Code
 
 # Bind to socket events
-SS.socket.on 'disconnect', ->  $('#message').text('SocketStream server is down :-(')
-SS.socket.on 'reconnect', ->   $('#message').text('SocketStream server is up :-)')
+SS.socket.on 'disconnect', ->
+SS.socket.on 'reconnect', ->
 
 # This method is called automatically when the websocket connection is established. Do not rename/delete
 exports.init = ->
 
-  # Make a call to the server to retrieve a message
-  SS.server.app.init (response) ->
-    $('#message').text(response)
-
   # Start the lobby
   SS.client.lobby.init()
+
+  # Start the game
+  SS.client.game.init()
