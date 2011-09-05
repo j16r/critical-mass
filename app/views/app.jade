@@ -1,19 +1,44 @@
 !!! 5
-html(lang="en")
+html(lang = "en")
   head
     != SocketStream
-    meta(charset="utf-8")
-    title Welcome
+    meta(charset = "utf-8")
+    title Critical Mass
   body
     #content
-      a(href='https://github.com/socketstream/socketstream')
-        img(src='/images/logo.png', alt='SocketStream Logo', width=167, height=159)
-      h1 Welcome to your new real time app!
-      p#message Attempting to connect to the server over websockets or Socket.IO fallback transports...
-      
-      // QUICK CHAT DEMO
-      form#demo(onsubmit='return false')
-        h3 Quick Chat Demo
-        h5 Open this page in multiple tabs or browsers and type a message below
-        #chatlog
-        input(id='myMessage', type='text', autocomplete='off')
+      div#authentication
+        h1 Critical Mass
+        form#login(onsubmit = 'return false')
+          label(for = 'username') Nickname:
+          input(id = 'username', type = 'text', autocomplete = 'off')
+
+      div#game(style = 'display:none')
+        div#board
+
+        div#key
+          ul#playerList
+
+      div.clear
+
+      div#main(style = 'display:none')
+        a#logout(href = '#') Logout
+
+        div#game(style = 'display:none')
+        
+        div#lobby
+          form#chatroom(onsubmit = 'return false')
+            h3 Lobby
+
+            div#channel
+              table
+                tbody#chatlog
+
+            div#users
+              h4 Players
+              ul#userlist
+
+              div#menu
+                input#startGame(type ='submit', value='Start Game')
+
+            div#text
+              input(id = 'message', type = 'text', autocomplete  ='off')

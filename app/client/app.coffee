@@ -11,5 +11,5 @@ exports.init = ->
   SS.server.app.init (response) ->
     $('#message').text(response)
 
-  # Start the Quick Chat Demo
-  SS.client.demo.init()
+  # Start the lobby
+  SS.client.lobby.init()

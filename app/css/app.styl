@@ -1,16 +1,14 @@
-// Example Stylus file
-// All changes are detected and automatically compiled into CSS
-
 @import 'helpers'
 
 // Main
 
 body, html
   height 100%
+  font-family "Helvetica Neue", Helvetica, Arial, sans-serif
 
 body
   font normal 1em sans-serif
-  vertical-gradient #eee, #fff
+  background #eee
   text-align center
 
 p
@@ -22,54 +20,198 @@ a
 h1
   font-size 1.5em
   font-weight normal
-  margin 1.5em
+  margin 0px
   color #0057c5
   text-shadow 1px 1px 2px white
 
 #content
   padding 50px
 
-
-// Quick Chat Demo - Delete below this line!
-
-#demo
+#chatroom
   display none
-  width 700px
-  text-align left
-  vertical-gradient #ddd, #eee
-  border 1px solid #ccc
+  width 800px
   margin 40px auto
-  padding 15px
-  round 10px
+  text-align left
+  border 1px solid #aaa
+
   h3
-    margin 0
-    font-size 1.0em
+    color #fff
+    margin 0px
+    background #222
+    vertical-gradient #333, #222
+    text-shadow 0 -1px 0 rgba(0, 0, 0, 0.25)
+    height 32px
+    padding-top 8px
+    padding-left 8px
     font-weight normal
-  h5
-    color #666
+    box-shadow 0 1px 3px rgba(0, 0, 0, 0.25), inset 0 -1px 0 rgba(0, 0, 0, 0.1)
+
+  h4
+    font-size 14px
     font-weight normal
-    font-size 0.8em
-    padding 5px 0
-    margin 0
-  #myMessage, #chatlog
-    border none
-    box-shadow inset 0 0 2px #777
-    round 5px
-  #myMessage
-    width 690px
+    margin 0px
+    background #efe
+    vertical-gradient #eee, #ddd
     padding 5px
-    margin 0
+    border-bottom 1px solid #aaa
+
+  div#text
+    border-top 1px solid #aaa
+    background #fff
+    input
+      border none
+      width 98%
+      margin 0px
+
+  #channel
+    border-right 1px solid #aaa
+    background #fff
+    width 650px
+    height 400px
+    overflow-y scroll
+    float left
+    table
+      width 100%
+      tr
+        height 1.2em
+        td
+          vertical-align top
+          padding 6px
+          a
+            color white
+            font-weight bold
+        th
+          width 6em
+          padding 6px
+        td.announce
+          text-shadow 0 -1px 0 rgba(0, 0, 0, 0.25)
+          border-top 1px solid #ddd
+          border-bottom 1px solid #ddd
+          box-shadow inset 0 1px 0 rgba(255, 255, 255, 0.25)
+          background-color #339BB9
+          vertical-gradient #5bc0de, #339bb9
+          color #fff
+        td.gameOffer
+          background-color #57A957
+          vertical-gradient #62c462, #57a957
+        td.acceptOffer
+          background-color #57A957
+          vertical-gradient #62c462, #57a957
+        td.gameBegins
+          font-weight bold
+          background-color #57A957
+          vertical-gradient #62c462, #57a957
+
+
   #chatlog
-    width 700px
     background-color white
-    margin 5px 0
-    p
-      font-size 0.9em
-      color #000a68
-      padding 3px 9px
-      margin 0
-    p:first-child
-      padding-top 9px
-    p:last-child
-      padding-bottom 9px
-    
+
+  #users
+    background #fff
+    float left
+
+  #users
+    height 100%
+
+  #userlist
+    width 149px
+    height 348px
+    overflow-y scroll
+    margin 0px
+    padding 0px
+    li
+      padding 4px
+    li.selected
+        background-color #bfb
+
+  div#menu
+    input
+      font-size 13px
+      border none
+      border-top 1px solid #aaa
+      border-bottom 1px solid #aaa
+      width 100%
+      background #efe
+      vertical-gradient #ddd, #eee
+      color #ccc
+      padding 4px
+      text-align left
+    input.active
+      color #000
+      color white
+      background-color #0064CD
+      border-color #0064CD #0064CD #003F81
+      vertical-gradient #0064CD, #003F81
+      text-shadow 0 -1px 0 rgba(0, 0, 0, 0.25)
+
+form#login
+  label
+    width 30em
+
+div#game
+  margin 40px auto
+
+  div#board
+    float left
+    ol
+      height 64px
+      padding 0px
+      margin 0px
+      line-height 64px
+      li
+        height 64px
+        width 64px
+        display inline
+        list-style-type none
+
+  div#key
+    float left
+    ul#playerList
+      li
+        position relative
+        z-index 1
+        overflow hidden
+        list-style none
+        padding 0
+        margin 0 0 0.25em
+        text-indent 48px
+        height 52px
+        span
+          float right
+        &:before, &:after, a:after, a:before
+          content ""
+          position absolute
+          top 50%
+          left 0
+          background #00f
+          vertical-gradient #00f, #00a
+        &:nth-child(2)
+          &:before, &:after, a:after, a:before
+            background #f00
+            vertical-gradient #f00, #a00
+        &:nth-child(3)
+          &:before, &:after, a:after, a:before
+            background #0f0
+            vertical-gradient #0f0, #0a0
+        &:nth-child(4)
+          &:before, &:after, a:after, a:before
+            background #ff0
+            vertical-gradient #ff0, #aa0
+        a
+          &:before
+            left 4px
+            width 32px
+            height 32px
+            margin-top 4px
+            border-radius 32px 32px 0 0
+          &:after
+            left 4px
+            width 32px
+            height 32px
+            margin-top -26px
+            border-radius 32px 32px 32px 32px / 32px 32px 32px 32px
+      li.gameOver
+        text-decoration line-through
+
+div.clear
+  clear both
