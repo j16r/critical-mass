@@ -1,0 +1,8 @@
+{
+  "name": "critical-mass",
+  "version": "0.0.1",
+  "dependencies": {
+    "socketstream": "0.2.1",
+    "nib": "0.2.0"
+  }
+}
