@@ -5,41 +5,45 @@ html(lang = "en")
     meta(charset = "utf-8")
     title Critical Mass
   body
-    #content
-      div#authentication(style = 'display:none')
-        h1 Critical Mass
-        form#login(onsubmit = 'return false')
+    div#authentication
+      form#login(onsubmit = 'return false')
+        legend Critical Mass
+        fieldset
+          label(for = 'username') Nickname
+          div.input
+            input(id = 'username', type = 'text', autocomplete = 'off')
           div#errors
-          label(for = 'username') Nickname:
-          input(id = 'username', type = 'text', autocomplete = 'off')
 
-      div#game(style = 'display:none')
+    div#main
+      div#topmenu
+        span#userInfo
+          span Logged in as
+          span#currentUser
+          a#logout(href = '#') Logout
+        h1 Critical Mass
+
+      div#game
         div#board
 
         div#key
           ul#playerList
 
       div.clear
+      
+      div#lobby
+        h1 Lobby
 
-      div#main(style = 'display:none')
-        a#logout(href = '#') Logout
+        div#channel
+          table
+            tbody#chatLog
 
-        div#game(style = 'display:none')
-        
-        div#lobby
+        div#users
+          h4 Players
+          ul#userList
+
+          div#menu
+            input#startGame(type ='submit', value='Start Game')
+
+        div#text
           form#chatroom(onsubmit = 'return false')
-            h3 Lobby
-
-            div#channel
-              table
-                tbody#chatLog
-
-            div#users
-              h4 Players
-              ul#userList
-
-              div#menu
-                input#startGame(type ='submit', value='Start Game')
-
-            div#text
-              input(id = 'message', type = 'text', autocomplete  ='off')
+            input(id = 'message', type = 'text', autocomplete = 'off')

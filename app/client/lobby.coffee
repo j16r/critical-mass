@@ -1,17 +1,7 @@
 MAX_PLAYERS = 4
 
-window.lobby_data =
-  currentUser: null
-
 # The game lobby, where people go to find others to play games with
 exports.init = ->
-
-  SS.server.app.init (username) ->
-    if username
-      revealMainScreen()
-      lobby_data.currentUser = username
-    else
-      revealLogin()
 
   # SS Event handlers ##########################################################
 
@@ -19,28 +9,31 @@ exports.init = ->
   SS.events.on 'userSignon', (username) ->
     return if $("#userList li##{username}").length > 0
 
-    $("<li id='#{username}'>#{username}</li>").hide().appendTo('#userList').slideDown()
-    $("<tr><td colspan='2' class='announce signon'>#{username} signed on</td></tr>").hide().appendTo('#chatLog').slideDown()
+    $('<li>').attr('id', username).text(username).hide().appendTo('#userList').slideDown()
+    SS.client.lobby.announce("#{username} signed on", 'signOn')
 
   # A user has signed off
   SS.events.on 'userSignoff', (username) ->
-    console.log(username)
-    userLabel = $("#userList li##{username}")
-    return unless userLabel
+    return unless userLabel = $("#userList li##{username}")
 
     userLabel.remove()
-    $("<tr><td colspan='2' class='announce signoff'>#{username} signed off</td></tr>").hide().appendTo('#chatLog').slideDown()
+    SS.client.lobby.announce("#{username} signed off", 'signOff')
 
   # a new chat message was sent
   SS.events.on 'newMessage', (message) ->
-    $("<tr><th>#{message['user']}</th><td>#{message['text']}</td></tr>").hide().appendTo('#chatLog').slideDown()
+    SS.client.lobby.message($('<tr>').append($('<th>').text(message.user)).append($('<td>').text(message.text)))
+    $("table tr:last-child").addClass("own") if message.user is currentUser()
     $('#channel').animate({scrollTop: $('#chatLog').height()}, 0)
+
+  # Player entered a game
+  SS.events.on 'playerBusy', (message) ->
+    $.each message.users, (user) ->
+      $('<li>').attr('id', user).addClass('busy')
 
   # DOM Event handlers #########################################################
 
   $('#chatroom').show().submit ->
-    message = $('#message').val()
-    return unless message.length > 0
+    return unless (message = $('#message').val()).length > 0
 
     SS.server.app.sendMessage message, (success) ->
       if success
@@ -57,18 +50,16 @@ exports.init = ->
       $('#userList').children().remove()
 
       if response.success
-        console.log("Users online: ", response.usersOnline)
-        lobby_data.currentUser = username
         $('#username').val('')
-        revealMainScreen()
-        console.log("Users online: ", response.usersOnline)
+        $('#currentUser').text(username)
         $.each response.usersOnline, (index, user) ->
-          $("<li id='#{user}'>#{user}</li>").hide().appendTo('#userList').slideDown()
+          $('<li>').attr('id', user).text(user).appendTo('#userList')
+        revealMainScreen()
       else
-        $('#errors').append("<ul><li>#{response.message}</li></ul>")
+        $('#errors').append('<ul>').append('<li>').text(response.message)
 
   $('#userList li').live 'click',  ->
-    return if $(this).text() is lobby_data.currentUser
+    return if $(this).text() is currentUser()
 
     if selectedUsers().length < (MAX_PLAYERS - 1)
       $(this).toggleClass('selected')
@@ -79,25 +70,53 @@ exports.init = ->
       $('#startGame').removeClass('active')
 
   $('#startGame.active').live 'click', ->
-    SS.server.app.offerGame lobby_data.currentUser, selectedUsers(), (success) ->
-
-  $('#accept').live 'click', ->
-    SS.server.app.acceptGame lobby_data.currentUser, (success) ->
+    players = selectedUsers()
+    SS.server.app.offerGame currentUser(), players, (success) ->
+      $('#startGame').removeClass('active')
+      $('#userList li').removeClass('selected')
+      SS.client.lobby.announce("You have offered to host a game for #{players.join(', ')}", 'gameOffer')
 
   $('#logout').click ->
     SS.server.app.logout (success) ->
       if success then revealLogin()
 
-  # Functions #################################################################
+  $(window).resize ->
+    SS.client.lobby.resizeLobby($('#lobby').position().top)
+
+  # Private functions ##########################################################
+
+  currentUser = ->
+    $('#currentUser').text()
 
   revealLogin = ->
-    $('#main').hide()
-    $('#authentication').fadeIn()
+    $('#lobby').animate {top: '100%'}, ->
+      $('#main').hide()
+      $('#authentication').fadeIn()
 
   revealMainScreen = ->
-    $('#authentication').hide()
-    $('#main').fadeIn()
+    $('#authentication').fadeOut ->
+      $('#main').show()
+      SS.client.lobby.slideLobby($('#topmenu').height() + 1)
 
   selectedUsers = ->
     $.map $('#userList li.selected'), (li, index) ->
       $(li).text()
+
+# Exported functions ##########################################################
+
+exports.announce = (message, type) ->
+  SS.client.lobby.message($('<tr>').append($('<td>').attr('colspan', 2).addClass('announce').addClass(type).html(message)))
+
+exports.message = (row) ->
+  row.hide().appendTo('#chatLog').slideDown()
+
+exports.slideLobby = (top) ->
+  SS.client.lobby.resizeLobby(top)
+  $('#lobby').height(window.innerHeight)
+  $('#lobby').animate({top: top})
+
+exports.resizeLobby = (top) ->
+  new_lobby_height = window.innerHeight - (top + $('#lobby h1').outerHeight() + $('#text').outerHeight())
+  $('#channel').height(new_lobby_height)
+  new_userlist_height = new_lobby_height - ($('#users h4').outerHeight() + $('#lobby #menu').outerHeight())
+  $('#userList').height(new_userlist_height)

@@ -4,39 +4,28 @@ TILES_ACROSS = 10
 TILES_DOWN = 6
 
 window.game_data =
-  expectedPlayers: null
-  readyPlayers: null
-  scores: null
   currentPlayer: null
+  players: null
+  scores: null
+  currentGame: null
 
 exports.init = ->
 
-  # A game offer has been made
-  SS.events.on 'gameOffer', (message) ->
-    if lobby_data.currentUser is message.host
-      beginGame(message.host, message.players)
-      $("<tr><td colspan='2' class='announce gameOffer'>You have offered to host a game for #{message.players}</td></tr>").hide().appendTo('#chatlog').slideDown()
-    else if lobby_data.currentUser in message.players
-      beginGame(message.host, message.players)
-      $("<tr><td colspan='2' class='announce gameOffer'>#{message.host} has offered to play a game with you, <a id='accept' href='#'>click here to accept</a></td></tr>").hide().appendTo('#chatlog').slideDown()
+  # SS Event handlers ##########################################################
 
-  # A game offer has been accepted
-  SS.events.on 'acceptOffer', (message) ->
-    if lobby_data.currentUser isnt message.player
-      $("<tr><td colspan='2' class='announce acceptOffer'>#{message.player} has accepted the game</td></tr>").hide().appendTo('#chatlog').slideDown()
+  SS.events.on 'gameOffer', (game) ->
+    SS.client.lobby.announce($('<p>').text("#{game.host} has offered to play a game with you. ").append($('<a>').attr('id', 'accept').text('Click here to accept.').data('game_id', game.id)), 'gameOffer')
 
-    if message.player in game_data.expectedPlayers
-      game_data.readyPlayers.push(message.player)
+  SS.events.on 'acceptOffer', (player) ->
+    SS.client.lobby.announce("#{player} has accepted the game", 'acceptOffer')
 
-    if allPlayersReady()
-      $("<tr><td colspan='2' class='announce gameBegins'>All players have accepted the game.</td></tr>").hide().appendTo('#chatlog').slideDown()
-      activateGame()
+  SS.events.on 'gameBegins', (game, channel_name) ->
+    SS.client.lobby.announce('All players have accepted the game', 'gameBegins')
+    activateGame(game)
 
-  SS.events.on 'playMove', (message) ->
-    return if gameOver()
-
-    player = message.player
-    tile = lookupTile(message.x, message.y)
+  SS.events.on 'playMove', (move, channel_name) ->
+    player = move.player
+    tile = lookupTile(move.x, move.y)
 
     owner = tile.data('owner')
     return unless owner is player or not owner?
@@ -44,6 +33,23 @@ exports.init = ->
     game_data.scores[player] += 1
     updateScoreBoard()
     fuseAtoms(player, tile)
+
+    game_data.currentPlayer = move.newPlayer
+
+  # DOM Event handlers #########################################################
+
+  $('#accept').live 'click', ->
+    game_id = $(this).data('game_id')
+    SS.server.app.acceptGame game_id, lobby_data.currentUser, (success) ->
+
+  $('#board img').live 'click', ->
+    return if game_data.currentPlayer isnt lobby_data.currentUser || !playerAlive(lobby_data.currentUser)
+
+    x = $(this).data('x')
+    y = $(this).data('y')
+    SS.server.app.playMove game_data.currentGame, x, y, (success) ->
+
+  # Functions #################################################################
 
   fuseAtoms = (player, tile) ->
     tiles = [tile]
@@ -62,13 +68,14 @@ exports.init = ->
       if tile.hasClass('corner') && atoms > 1 || tile.hasClass('edge') && atoms > 2 || atoms > 3
         tile.data('atoms', null)
         tile.data('owner', null)
-        tile[0].src = "/images/Tile.png"
+        tile[0].src = "/images/empty_tile.png"
 
-        # Place atoms in adjacent tiles
-        tiles.push(lookupTile(x - 1, y)) if x > 1
-        tiles.push(lookupTile(x + 1, y)) if x < TILES_ACROSS
-        tiles.push(lookupTile(x, y - 1)) if y > 1
-        tiles.push(lookupTile(x, y + 1)) if y < TILES_DOWN
+        # Place atoms in adjacent tiles unless the game is over
+        unless gameOver()
+          tiles.push(lookupTile(x - 1, y)) if x > 1
+          tiles.push(lookupTile(x + 1, y)) if x < TILES_ACROSS
+          tiles.push(lookupTile(x, y - 1)) if y > 1
+          tiles.push(lookupTile(x, y + 1)) if y < TILES_DOWN
 
       else
         tile.data('atoms', atoms)
@@ -82,13 +89,12 @@ exports.init = ->
           playerLost(old_owner)
         game_data.scores[player] += old_atoms
         updateScoreBoard()
-        return if gameOver()
 
   gameOver = ->
-    game_data.readyPlayers.length - $('#playerList li.gameOver').length == 1
+    $('#playerList li:not(.gameOver)').length == 1
 
   updateScoreBoard = ->
-    $.each game_data.readyPlayers, (index, player) ->
+    $.each game_data.players, (index, player) ->
       $("#playerList li##{player} span").text(game_data.scores[player])
 
   playerLost = (player) ->
@@ -98,49 +104,43 @@ exports.init = ->
     not $("#playerList li##{player}").hasClass('gameOver')
 
   playerColor = (player) ->
-    player_index = game_data.readyPlayers.indexOf(player)
+    player_index = game_data.players.indexOf(player)
     PLAYER_COLORS[player_index]
 
-  $('#board img').live 'click', ->
-    return if gameOver()
-
-    if playerAlive(lobby_data.currentUser)
-      x = $(this).data('x')
-      y = $(this).data('y')
-      SS.server.app.playMove lobby_data.currentUser, x, y, (success) ->
-        console.log("Player #{lobby_data.currentUser} played at #{x}, #{y}")
-
-  beginGame = (host, players) ->
-    game_data.expectedPlayers = players.concat(host)
-    game_data.readyPlayers = [host]
-
-  allPlayersReady = ->
-    game_data.expectedPlayers.length == game_data.readyPlayers.length
-
-  activateGame = ->
-    $('#game').fadeIn()
+  activateGame = (game) ->
     game_data.scores = {}
+    game_data.currentPlayer = game.currentPlayer
+    game_data.players = game.readyPlayers
+    game_data.currentGame = game.id
+
+    clearGameBoard()
+    clearScoreBoard()
     drawScoreBoard()
     drawGameBoard()
+
+    SS.client.lobby.slideLobby($('#topmenu').outerHeight() + $('#game').outerHeight(true))
+    $('#game').fadeIn()
 
   lookupTile = (x, y) ->
     $("#board ol:nth-child(#{y}) li:nth-child(#{x}) img")
 
-  drawScoreBoard = ->
+  clearScoreBoard = ->
     $('#playerList').children().remove()
+  
+  clearGameBoard = ->
+    $('#board').children().remove()
 
-    $.each game_data.readyPlayers, (index, player) ->
-      $("<li id='#{player}'><a>#{player}</a><span>0</span></li>").hide().appendTo('#playerList').slideDown()
+  drawScoreBoard = ->
+    $.each game_data.players, (index, player) ->
+      $('<li>').attr('id', player).append($('<a>').text(player).add($('<span>').text('0'))).appendTo('#playerList')
       game_data.scores[player] = 0
 
   drawGameBoard = ->
-    $('#board').children().remove()
-
     for y in [1..TILES_DOWN]
       $('#board').append($('<ol>'))
       row = $('#board ol:last-child')
       for x in [1..TILES_ACROSS]
-        row.append($("<li><img src='/images/Tile.png'></li>"))
+        row.append($('<li>').append($('<img>').attr('src', '/images/empty_tile.png')))
         $('#board ol:last-child li:last-child img').data('x', x).data('y', y)
 
     $('#board ol:first-child li:first-child img').addClass('corner')
