@@ -61,7 +61,7 @@ exports.actions =
   
   logout: (cb) ->
     withSession @session.id, (session) =>
-      R.hset 'users', session.userName, null
+      R.hdel 'users', session.userName
       R.hdel 'sessions', session.id
       SS.publish.broadcast 'userSignoff', session.userName
       cb true
