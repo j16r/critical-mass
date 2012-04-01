@@ -1,12 +1,7 @@
-PLAYER_COLORS = ['Blue', 'Red', 'Green', 'Yellow']
-
 TILES_ACROSS = 10
 TILES_DOWN = 6
 
 window.game_data =
-  currentPlayer: null
-  players: null
-  scores: null
   currentGame: null
 
 exports.init = ->
@@ -14,7 +9,10 @@ exports.init = ->
   # SS Event handlers ##########################################################
 
   SS.events.on 'gameOffer', (game) ->
-    SS.client.lobby.announce($('<p>').text("#{game.host} has offered to play a game with you. ").append($('<a>').attr('id', 'accept').text('Click here to accept.').data('game_id', game.id)), 'gameOffer')
+    acceptLink = $('<a>').text('Click here to accept.').click ->
+      SS.server.app.acceptGame game.id, SS.client.lobby.currentUser(), (success) ->
+
+    SS.client.lobby.announce($('<span>').text("#{game.host} has offered to play a game with you. ").append(acceptLink), 'gameOffer')
 
   SS.events.on 'acceptOffer', (player) ->
     SS.client.lobby.announce("#{player} has accepted the game", 'acceptOffer')
@@ -30,20 +28,20 @@ exports.init = ->
     owner = tile.data('owner')
     return unless owner is player or not owner?
 
-    game_data.scores[player] += 1
-    updateScoreBoard()
+    addToPlayerScore(player, 1)
+
     fuseAtoms(player, tile)
 
-    game_data.currentPlayer = move.newPlayer
+    $('#playerList li').removeClass('active')
+    $("#playerList li:nth-child(#{move.player})").addClass('active')
 
   # DOM Event handlers #########################################################
-
-  $('#accept').live 'click', ->
-    game_id = $(this).data('game_id')
-    SS.server.app.acceptGame game_id, lobby_data.currentUser, (success) ->
+  
+  currentPlayerName = (currentPlayerIndex) ->
+    $("#playerList li:nth-child(#{currentPlayerIndex + 1})").attr('id')
 
   $('#board img').live 'click', ->
-    return if game_data.currentPlayer isnt lobby_data.currentUser || !playerAlive(lobby_data.currentUser)
+    return if currentPlayerName(game_data.currentPlayer) isnt SS.client.lobby.currentUser()
 
     x = $(this).data('x')
     y = $(this).data('y')
@@ -51,19 +49,26 @@ exports.init = ->
 
   # Functions #################################################################
 
+  playerIndex = (player) ->
+    foundIndex = null
+    $.each $('#playerList li'), (index, element) ->
+      foundIndex = index if $(element).attr('id') is player
+    foundIndex
+
   fuseAtoms = (player, tile) ->
+    playerIndex = playerIndex(player)
     tiles = [tile]
     while tile = tiles.pop()
       x = tile.data('x')
       y = tile.data('y')
-      old_atoms = (tile.data('atoms') || 0)
-      old_owner = tile.data('owner')
+      oldAtoms = (tile.data('atoms') || 0)
+      oldOwner = tile.data('owner')
 
       # New owner
       tile.data('owner', player)
 
       # Set new amount of atoms
-      atoms = (old_atoms || 0) + 1
+      atoms = (oldAtoms || 0) + 1
 
       if tile.hasClass('corner') && atoms > 1 || tile.hasClass('edge') && atoms > 2 || atoms > 3
         tile.data('atoms', null)
@@ -79,23 +84,23 @@ exports.init = ->
 
       else
         tile.data('atoms', atoms)
-        tile[0].src = "/images/#{playerColor(player)}_#{atoms}.png"
+        tile[0].src = "/images/atoms_#{playerIndex}-#{atoms}.png"
 
       # Update the scores
-      if old_owner? and old_owner isnt player
-        previous_score = game_data.scores[old_owner]
-        game_data.scores[old_owner] -= old_atoms
-        if previous_score > 0 && game_data.scores[old_owner] == 0
-          playerLost(old_owner)
-        game_data.scores[player] += old_atoms
-        updateScoreBoard()
+      if oldOwner? and oldOwner isnt player
+        oldOwnerPreviousScore = parseInt($("#playerList li##{oldOwner} .score").text())
+        if oldOwnerPreviousScore > 0 && addToPlayerScore(oldOwner, -oldAtoms) == 0
+          playerLost(oldOwner)
+        addToPlayerScore(player, oldAtoms)
+
+  addToPlayerScore = (player, atoms) ->
+    scoreElement = $("#playerList li##{player} .score")
+    score = parseInt(scoreElement.text()) + atoms
+    scoreElement.text(score)
+    score
 
   gameOver = ->
     $('#playerList li:not(.gameOver)').length == 1
-
-  updateScoreBoard = ->
-    $.each game_data.players, (index, player) ->
-      $("#playerList li##{player} span").text(game_data.scores[player])
 
   playerLost = (player) ->
     $("#playerList li##{player}").addClass('gameOver')
@@ -103,19 +108,14 @@ exports.init = ->
   playerAlive = (player) ->
     not $("#playerList li##{player}").hasClass('gameOver')
 
-  playerColor = (player) ->
-    player_index = game_data.players.indexOf(player)
-    PLAYER_COLORS[player_index]
-
   activateGame = (game) ->
-    game_data.scores = {}
     game_data.currentPlayer = game.currentPlayer
     game_data.players = game.readyPlayers
     game_data.currentGame = game.id
 
     clearGameBoard()
     clearScoreBoard()
-    drawScoreBoard()
+    drawScoreBoard(game.readyPlayers)
     drawGameBoard()
 
     SS.client.lobby.slideLobby($('#topmenu').outerHeight() + $('#game').outerHeight(true))
@@ -130,10 +130,10 @@ exports.init = ->
   clearGameBoard = ->
     $('#board').children().remove()
 
-  drawScoreBoard = ->
-    $.each game_data.players, (index, player) ->
-      $('<li>').attr('id', player).append($('<a>').text(player).add($('<span>').text('0'))).appendTo('#playerList')
-      game_data.scores[player] = 0
+  drawScoreBoard = (players) ->
+    console.log("Drawing scoreboard ", players)
+    $.each players, (index, player) ->
+      $('<li>').attr('id', player).append($('<a>').text(player).add($('<span>').addClass('score').text('0'))).appendTo('#playerList')
 
   drawGameBoard = ->
     for y in [1..TILES_DOWN]
