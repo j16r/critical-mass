@@ -1,6 +1,8 @@
 # Private functions ##########################################################
 
 withSession = (sessionId, process) =>
+  return unless sessionId?
+
   R.hget 'sessions', sessionId, (error, sessionData) =>
     if sessionData?
       session = JSON.parse sessionData
@@ -36,16 +38,29 @@ exports.init =
 
 exports.actions =
 
+  restoreSession: (cb) ->
+    console.log "Attempting to restore session for #{@session.id}"
+    R.hget 'sessions', @session.id, (error, sessionData) =>
+      if sessionData?
+        session = JSON.parse sessionData
+        console.log "Found session data ", session, session.userName
+        SS.publish.broadcast 'userSignon', session.userName
+        usersOnline (userNames) =>
+          cb success: true, usersOnline: userNames, username: session.userName
+      else
+        console.log "No session saved for ", @session.id
+        cb success: false
+
   login: (userName, cb) ->
     console.log "'#{userName}' is attempting to login..."
 
     R.hget 'users', userName, (error, sessionId) =>
       if sessionId?
-        console.log "'#{userName}' is already logged in"
+        console.log "'#{userName}' is already logged in with sessionID #{sessionId}"
         cb success: false
         
       else
-        console.log("making new session for '#{userName}'")
+        console.log("making new session for '#{userName}':#{@session.id}")
         now = new Date()
         session = {
           id: @session.id,
@@ -55,6 +70,7 @@ exports.actions =
         }
         R.hset 'users', userName, session.id
         R.hset 'sessions', session.id, JSON.stringify(session)
+        @session.setUserId(userName)
         SS.publish.broadcast 'userSignon', userName
         usersOnline (userNames) =>
           cb success: true, usersOnline: userNames
@@ -98,33 +114,44 @@ exports.actions =
       R.hset 'games', gameId, JSON.stringify(game)
 
       @session.channel.subscribe(game.channel)
-      SS.publish.user(player, 'gameOffer', game) for player in game.offeredPlayers
+      for player in game.offeredPlayers
+        console.log("Offering game to ", player)
+        SS.publish.user(player, 'gameOffer', game)
 
       cb true
 
   acceptGame: (gameId, player, cb) ->
-    return unless game = games[gameId]
+    withSession @session.id, (session) =>
+      R.hget 'games', gameId, (error, gameData) =>
+        return unless gameData?
 
-    console.log("Player ", player, " accepted: ", game)
-    @session.channel.subscribe(game.channel)
-    game.readyPlayers.push(player)
-    cb true
+        game = JSON.parse gameData
+        player = session.userName
 
-    SS.publish.user(player, 'acceptOffer', player) for player in game.expectedPlayers
+        @session.channel.subscribe(game.channel)
+        game.readyPlayers.push(player)
+        R.hset 'games', gameId, JSON.stringify(game)
+        console.log("Player ", player, " accepted: ", game)
+        cb true
 
-    if game.expectedPlayers.length == game.readyPlayers.length
-      SS.publish.channel game.channel, 'gameBegins', game
+        SS.publish.user(player, 'acceptOffer', player) for player in game.expectedPlayers
+
+        if game.expectedPlayers.length == game.readyPlayers.length
+          SS.publish.channel game.channel, 'gameBegins', game
 
   playMove: (gameId, x, y, cb) ->
-    return unless game = games[gameId]
+    R.hget 'games', gameId, (error, gameData) =>
+      return unless gameData?
 
-    # Advance the player
-    move = {player: game.currentPlayer, x: x, y: y}
-    game.currentPlayer += 1
-    game.currentPlayer = 0 if game.currentPlayer == game.readyPlayers.length
-    move.newPlayer = game.currentPlayer
+      game = JSON.parse gameData
 
-    SS.publish.channel game.channel, 'playMove', move
+      # Advance the player
+      move = {player: game.currentPlayer, x: x, y: y}
+      newPlayerIndex = (game.readyPlayers.indexOf(game.currentPlayer) + 1) % game.readyPlayers.length
+      game.currentPlayer = game.readyPlayers[newPlayerIndex]
+      R.hset 'games', gameId, JSON.stringify(game)
+      move.newPlayer = game.currentPlayer
 
-    cb true
+      SS.publish.channel game.channel, 'playMove', move
 
+      cb true

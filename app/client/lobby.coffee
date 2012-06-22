@@ -3,6 +3,12 @@ MAX_PLAYERS = 4
 # The game lobby, where people go to find others to play games with
 exports.init = ->
 
+  SS.server.app.restoreSession (response) ->
+    if response.success is true
+      initLogin(response.username, response.usersOnline)
+    else
+      revealLogin()
+
   # SS Event handlers ##########################################################
 
   # A user has signed on
@@ -10,6 +16,8 @@ exports.init = ->
     return if $("#userList li##{username}").length > 0
 
     $('<li>').attr('id', username).text(username).hide().appendTo('#userList').slideDown()
+
+    return unless username is SS.client.lobby.currentUser()
     SS.client.lobby.announce("#{username} signed on", 'signOn')
 
   # A user has signed off
@@ -36,6 +44,8 @@ exports.init = ->
     $.each message.users, (user) ->
       $('<li>').attr('id', user).addClass('busy')
 
+  SS.events.on 'signedOn', (response) ->
+
   # DOM Event handlers #########################################################
 
   $('#chatroom').submit ->
@@ -56,12 +66,7 @@ exports.init = ->
       $('#userList').children().remove()
 
       if response.success
-        $('#username').val('')
-        $('#currentUser').text(username)
-        for user in response.usersOnline
-          $('<li>').attr('id', user).text(user).appendTo('#userList')
-        startHeartbeat()
-        revealMainScreen()
+        initLogin(username, response.usersOnline)
       else
         $('#errors').append('<ul>').append('<li>').text(response.message)
 
@@ -92,6 +97,14 @@ exports.init = ->
     SS.client.lobby.resizeLobby($('#lobby').position().top)
 
   # Private functions ##########################################################
+  
+  initLogin = (username, usersOnline) ->
+    $('#username').val('')
+    $('#currentUser').text(username)
+    for user in usersOnline
+      $('<li>').attr('id', user).text(user).appendTo('#userList')
+    startHeartbeat()
+    revealMainScreen()
 
   revealLogin = ->
     $('#lobby').animate {top: '100%'}, ->
@@ -107,7 +120,7 @@ exports.init = ->
     $(li).text() for li in $('#userList li.selected')
 
   startHeartbeat = ->
-    window.heartbeat = setInterval (-> SS.server.app.heartbeat()), 10000
+    window.heartbeat = setInterval (-> SS.server.app.heartbeat()), 15000
 
 # Exported functions ##########################################################
 
@@ -115,18 +128,26 @@ exports.currentUser = ->
   $('#currentUser').text()
 
 exports.announce = (message, type) ->
-  SS.client.lobby.message($('<tr>').append($('<td>').attr('colspan', 2).addClass('announce').addClass(type).html(message)))
+  SS.client.lobby.message $('<tr>').append(
+    $('<td>')
+      .attr('colspan', 2)
+      .addClass('announce')
+      .addClass(type)
+      .html(message))
 
 exports.message = (row) ->
   row.hide().appendTo('#chatLog').slideDown()
 
 exports.slideLobby = (top) ->
   SS.client.lobby.resizeLobby(top)
-  $('#lobby').height(window.innerHeight)
-  $('#lobby').animate({top: top})
+  $('#lobby')
+    .height(window.innerHeight)
+    .animate({top: top})
 
 exports.resizeLobby = (top) ->
   newLobbyHeight = window.innerHeight - (top + $('#lobby h1').outerHeight() + $('#text').outerHeight())
-  $('#channel').height(newLobbyHeight)
-  newUserlistHeight = newLobbyHeight - ($('#users h4').outerHeight() + $('#lobby #menu').outerHeight())
-  $('#userList').height(newUserlistHeight)
+  $('#channel')
+    .height(newLobbyHeight)
+  newUserlistHeight = newLobbyHeight - ($('#users h4').outerHeight() + $('#menu').outerHeight())
+  $('#userList')
+    .height(newUserlistHeight)

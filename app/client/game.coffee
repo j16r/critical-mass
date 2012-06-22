@@ -1,5 +1,6 @@
 TILES_ACROSS = 10
 TILES_DOWN = 6
+ATOM_COUNT_TO_CLASS_NAMES = ['zero', 'one', 'two', 'three', 'four']
 
 window.game_data =
   currentGame: null
@@ -9,6 +10,7 @@ exports.init = ->
   # SS Event handlers ##########################################################
 
   SS.events.on 'gameOffer', (game) ->
+    console.log "Received a game offer: ", game
     acceptLink = $('<a>').text('Click here to accept.').click ->
       SS.server.app.acceptGame game.id, SS.client.lobby.currentUser(), (success) ->
 
@@ -37,23 +39,29 @@ exports.init = ->
 
   # DOM Event handlers #########################################################
   
-  currentPlayerName = (currentPlayerIndex) ->
-    $("#playerList li:nth-child(#{currentPlayerIndex + 1})").attr('id')
+  playerIndex = (playerName) ->
+    game_data.players.indexOf(playerName) + 1
+  
+  currentPlayerName = (playerName) ->
+    $("#playerList li:nth-child(#{playerIndex playerName})").attr('id')
 
-  $('#board img').live 'click', ->
-    return if currentPlayerName(game_data.currentPlayer) isnt SS.client.lobby.currentUser()
+  $('#board li').live 'click', ->
+    console.log("Click...")
+    #return if currentPlayerName(game_data.currentPlayer) isnt SS.client.lobby.currentUser()
+    return if game_data.currentPlayer isnt SS.client.lobby.currentUser()
 
+    console.log("...", this)
     x = $(this).data('x')
     y = $(this).data('y')
     SS.server.app.playMove game_data.currentGame, x, y, (success) ->
 
   # Functions #################################################################
 
-  playerIndex = (player) ->
-    foundIndex = null
-    $.each $('#playerList li'), (index, element) ->
-      foundIndex = index if $(element).attr('id') is player
-    foundIndex
+  #playerIndex = (player) ->
+    #foundIndex = null
+    #for element, index in $('#playerList li')
+      #foundIndex = index if $(element).attr('id') is player
+    #foundIndex
 
   fuseAtoms = (player, tile) ->
     playerIndex = playerIndex(player)
@@ -71,9 +79,7 @@ exports.init = ->
       atoms = (oldAtoms || 0) + 1
 
       if tile.hasClass('corner') && atoms > 1 || tile.hasClass('edge') && atoms > 2 || atoms > 3
-        tile.data('atoms', null)
-        tile.data('owner', null)
-        tile[0].src = "/images/empty_tile.png"
+        tile.data('atoms', null).data('owner', null)
 
         # Place atoms in adjacent tiles unless the game is over
         unless gameOver()
@@ -83,8 +89,7 @@ exports.init = ->
           tiles.push(lookupTile(x, y + 1)) if y < TILES_DOWN
 
       else
-        tile.data('atoms', atoms)
-        tile[0].src = "/images/atoms_#{playerIndex}-#{atoms}.png"
+        tile.data('atoms', atoms).addClass(ATOM_COUNT_TO_CLASS_NAMES[atoms])
 
       # Update the scores
       if oldOwner? and oldOwner isnt player
@@ -122,33 +127,30 @@ exports.init = ->
     $('#game').fadeIn()
 
   lookupTile = (x, y) ->
-    $("#board ol:nth-child(#{y}) li:nth-child(#{x}) img")
+    $("#board ol:nth-child(#{y}) li:nth-child(#{x})")
 
   clearScoreBoard = ->
-    $('#playerList').children().remove()
+    $('#playerList').empty()
   
   clearGameBoard = ->
-    $('#board').children().remove()
+    $('#board').empty()
 
   drawScoreBoard = (players) ->
     console.log("Drawing scoreboard ", players)
-    $.each players, (index, player) ->
+    for player in players
       $('<li>').attr('id', player).append($('<a>').text(player).add($('<span>').addClass('score').text('0'))).appendTo('#playerList')
 
   drawGameBoard = ->
+    board = $('#board')
     for y in [1..TILES_DOWN]
-      $('#board').append($('<ol>'))
-      row = $('#board ol:last-child')
+      row = $('<ol>').appendTo(board)
       for x in [1..TILES_ACROSS]
-        row.append($('<li>').append($('<img>').attr('src', '/images/empty_tile.png')))
-        $('#board ol:last-child li:last-child img').data('x', x).data('y', y)
+        $('<li>').data('x', x).data('y', y)
+          .append('<div><img src="/images/blank.gif">')
+          .appendTo(row)
 
-    $('#board ol:first-child li:first-child img').addClass('corner')
-    $('#board ol:first-child li:last-child img').addClass('corner')
-    $('#board ol:last-child li:first-child img').addClass('corner')
-    $('#board ol:last-child li:last-child img').addClass('corner')
+    $('ol:first-child li:first-child, ol:first-child li:last-child, ol:last-child li:first-child, ol:last-child li:last-child', board)
+        .addClass('corner')
 
-    $('#board ol:first-child li img').addClass('edge')
-    $('#board ol:last-child li img').addClass('edge')
-    $('#board ol li:first-child img').addClass('edge')
-    $('#board ol li:last-child img').addClass('edge')
+    $('ol:first-child li, ol:last-child li, ol li:first-child, ol li:last-child', board)
+        .addClass('edge')
