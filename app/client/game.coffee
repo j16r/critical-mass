@@ -2,7 +2,7 @@ TILES_ACROSS = 10
 TILES_DOWN = 6
 ATOM_COUNT_TO_CLASS_NAMES = ['zero', 'one', 'two', 'three', 'four']
 
-window.game_data =
+window.gameData =
   currentGame: null
 
 exports.init = ->
@@ -19,52 +19,50 @@ exports.init = ->
   SS.events.on 'acceptOffer', (player) ->
     SS.client.lobby.announce("#{player} has accepted the game", 'acceptOffer')
 
-  SS.events.on 'gameBegins', (game, channel_name) ->
+  SS.events.on 'gameBegins', (game, channelName) ->
     SS.client.lobby.announce('All players have accepted the game', 'gameBegins')
     activateGame(game)
 
-  SS.events.on 'playMove', (move, channel_name) ->
+  SS.events.on 'playMove', (move, channelName) ->
     player = move.player
     tile = lookupTile(move.x, move.y)
 
     owner = tile.data('owner')
     return unless owner is player or not owner?
 
+    drawActivePlayer(player)
     addToPlayerScore(player, 1)
-
     fuseAtoms(player, tile)
-
-    $('#playerList li').removeClass('active')
-    $("#playerList li:nth-child(#{move.player})").addClass('active')
+    nextTurn(move.newPlayer) unless gameOver()
 
   # DOM Event handlers #########################################################
   
-  playerIndex = (playerName) ->
-    game_data.players.indexOf(playerName) + 1
-  
-  currentPlayerName = (playerName) ->
-    $("#playerList li:nth-child(#{playerIndex playerName})").attr('id')
-
   $('#board li').live 'click', ->
     console.log("Click...")
-    #return if currentPlayerName(game_data.currentPlayer) isnt SS.client.lobby.currentUser()
-    return if game_data.currentPlayer isnt SS.client.lobby.currentUser()
+    #return if currentPlayerName(gameData.currentPlayer) isnt SS.client.lobby.currentUser()
+    return if gameData.currentPlayer isnt SS.client.lobby.currentUser()
 
     console.log("...", this)
     x = $(this).data('x')
     y = $(this).data('y')
-    SS.server.app.playMove game_data.currentGame, x, y, (success) ->
+    SS.server.app.playMove gameData.currentGame, x, y, (success) ->
 
   # Functions #################################################################
+  
+  nextTurn = (playerName) ->
+    gameData.currentPlayer = playerName
 
-  #playerIndex = (player) ->
-    #foundIndex = null
-    #for element, index in $('#playerList li')
-      #foundIndex = index if $(element).attr('id') is player
-    #foundIndex
+  playerIndex = (playerName) ->
+    gameData.players.indexOf(playerName) + 1
+  
+  currentPlayerName = (playerName) ->
+    $("#playerList li:nth-child(#{playerIndex playerName})").attr('id')
+    
+  drawActivePlayer = (playerName) ->
+    $('#playerList li').removeClass('active')
+    $("#playerList li:nth-child(#{playerIndex(playerName)})").addClass('active')
 
   fuseAtoms = (player, tile) ->
-    playerIndex = playerIndex(player)
     tiles = [tile]
     while tile = tiles.pop()
       x = tile.data('x')
@@ -114,9 +112,9 @@ exports.init = ->
     not $("#playerList li##{player}").hasClass('gameOver')
 
   activateGame = (game) ->
-    game_data.currentPlayer = game.currentPlayer
-    game_data.players = game.readyPlayers
-    game_data.currentGame = game.id
+    gameData.currentPlayer = game.currentPlayer
+    gameData.players = game.readyPlayers
+    gameData.currentGame = game.id
 
     clearGameBoard()
     clearScoreBoard()
