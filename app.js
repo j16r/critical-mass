@@ -23,6 +23,10 @@ ss.client.formatters.add(require('ss-coffee'));
 ss.client.formatters.add(require('ss-stylus'));
 ss.client.formatters.add(require('ss-jade'));
 
+// Redis
+ss.session.store.use('redis');
+ss.publish.transport.use('redis');
+
 // Use server-side compiled Hogan (Mustache) templates. Others engines available
 //ss.client.templateEngine.use(require('ss-hogan'));
 

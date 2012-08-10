@@ -5,150 +5,148 @@ ATOM_COUNT_TO_CLASS_NAMES = ['zero', 'one', 'two', 'three', 'four']
 window.gameData =
   currentGame: null
 
-exports.init = ->
+# ss Event handlers ##########################################################
 
-  # SS Event handlers ##########################################################
+ss.event.on 'gameOffer', (game) ->
+  console.log "Received a game offer: ", game
+  acceptLink = $('<a>').text('Click here to accept.').click ->
+    ss.server.app.acceptGame game.id, ss.client.lobby.currentUser(), (success) ->
 
-  SS.events.on 'gameOffer', (game) ->
-    console.log "Received a game offer: ", game
-    acceptLink = $('<a>').text('Click here to accept.').click ->
-      SS.server.app.acceptGame game.id, SS.client.lobby.currentUser(), (success) ->
+  ss.client.lobby.announce($('<span>').text("#{game.host} has offered to play a game with you. ").append(acceptLink), 'gameOffer')
 
-    SS.client.lobby.announce($('<span>').text("#{game.host} has offered to play a game with you. ").append(acceptLink), 'gameOffer')
+ss.event.on 'acceptOffer', (player) ->
+  ss.client.lobby.announce("#{player} has accepted the game", 'acceptOffer')
 
-  SS.events.on 'acceptOffer', (player) ->
-    SS.client.lobby.announce("#{player} has accepted the game", 'acceptOffer')
+ss.event.on 'gameBegins', (game, channelName) ->
+  ss.client.lobby.announce('All players have accepted the game', 'gameBegins')
+  activateGame(game)
 
-  SS.events.on 'gameBegins', (game, channelName) ->
-    SS.client.lobby.announce('All players have accepted the game', 'gameBegins')
-    activateGame(game)
+ss.event.on 'playMove', (move, channelName) ->
+  player = move.player
+  tile = lookupTile(move.x, move.y)
 
-  SS.events.on 'playMove', (move, channelName) ->
-    player = move.player
-    tile = lookupTile(move.x, move.y)
+  owner = tile.data('owner')
+  return unless owner is player or not owner?
 
-    owner = tile.data('owner')
-    return unless owner is player or not owner?
+  drawActivePlayer(player)
+  addToPlayerScore(player, 1)
+  fuseAtoms(player, tile)
+  nextTurn(move.newPlayer) unless gameOver()
 
-    drawActivePlayer(player)
-    addToPlayerScore(player, 1)
-    fuseAtoms(player, tile)
-    nextTurn(move.newPlayer) unless gameOver()
+# DOM Event handlers #########################################################
 
-  # DOM Event handlers #########################################################
+$('#board li').live 'click', ->
+  console.log("Click...")
+  #return if currentPlayerName(gameData.currentPlayer) isnt ss.client.lobby.currentUser()
+  return if gameData.currentPlayer isnt ss.client.lobby.currentUser()
+
+  console.log("...", this)
+  x = $(this).data('x')
+  y = $(this).data('y')
+  ss.server.app.playMove gameData.currentGame, x, y, (success) ->
+
+# Functions #################################################################
+
+nextTurn = (playerName) ->
+  gameData.currentPlayer = playerName
+
+playerIndex = (playerName) ->
+  gameData.players.indexOf(playerName) + 1
+
+currentPlayerName = (playerName) ->
+  $("#playerList li:nth-child(#{playerIndex playerName})").attr('id')
   
-  $('#board li').live 'click', ->
-    console.log("Click...")
-    #return if currentPlayerName(gameData.currentPlayer) isnt SS.client.lobby.currentUser()
-    return if gameData.currentPlayer isnt SS.client.lobby.currentUser()
+drawActivePlayer = (playerName) ->
+  $('#playerList li').removeClass('active')
+  $("#playerList li:nth-child(#{playerIndex(playerName)})").addClass('active')
 
-    console.log("...", this)
-    x = $(this).data('x')
-    y = $(this).data('y')
-    SS.server.app.playMove gameData.currentGame, x, y, (success) ->
+fuseAtoms = (player, tile) ->
+  tiles = [tile]
+  while tile = tiles.pop()
+    x = tile.data('x')
+    y = tile.data('y')
+    oldAtoms = (tile.data('atoms') || 0)
+    oldOwner = tile.data('owner')
 
-  # Functions #################################################################
-  
-  nextTurn = (playerName) ->
-    gameData.currentPlayer = playerName
+    # New owner
+    tile.data('owner', player)
 
-  playerIndex = (playerName) ->
-    gameData.players.indexOf(playerName) + 1
-  
-  currentPlayerName = (playerName) ->
-    $("#playerList li:nth-child(#{playerIndex playerName})").attr('id')
-    
-  drawActivePlayer = (playerName) ->
-    $('#playerList li').removeClass('active')
-    $("#playerList li:nth-child(#{playerIndex(playerName)})").addClass('active')
+    # Set new amount of atoms
+    atoms = (oldAtoms || 0) + 1
 
-  fuseAtoms = (player, tile) ->
-    tiles = [tile]
-    while tile = tiles.pop()
-      x = tile.data('x')
-      y = tile.data('y')
-      oldAtoms = (tile.data('atoms') || 0)
-      oldOwner = tile.data('owner')
+    if tile.hasClass('corner') && atoms > 1 || tile.hasClass('edge') && atoms > 2 || atoms > 3
+      tile.data('atoms', null).data('owner', null)
 
-      # New owner
-      tile.data('owner', player)
+      # Place atoms in adjacent tiles unless the game is over
+      unless gameOver()
+        tiles.push(lookupTile(x - 1, y)) if x > 1
+        tiles.push(lookupTile(x + 1, y)) if x < TILES_ACROSS
+        tiles.push(lookupTile(x, y - 1)) if y > 1
+        tiles.push(lookupTile(x, y + 1)) if y < TILES_DOWN
 
-      # Set new amount of atoms
-      atoms = (oldAtoms || 0) + 1
+    else
+      tile.data('atoms', atoms).addClass(ATOM_COUNT_TO_CLASS_NAMES[atoms])
 
-      if tile.hasClass('corner') && atoms > 1 || tile.hasClass('edge') && atoms > 2 || atoms > 3
-        tile.data('atoms', null).data('owner', null)
+    # Update the scores
+    if oldOwner? and oldOwner isnt player
+      oldOwnerPreviousScore = parseInt($("#playerList li##{oldOwner} .score").text())
+      if oldOwnerPreviousScore > 0 && addToPlayerScore(oldOwner, -oldAtoms) == 0
+        playerLost(oldOwner)
+      addToPlayerScore(player, oldAtoms)
 
-        # Place atoms in adjacent tiles unless the game is over
-        unless gameOver()
-          tiles.push(lookupTile(x - 1, y)) if x > 1
-          tiles.push(lookupTile(x + 1, y)) if x < TILES_ACROSS
-          tiles.push(lookupTile(x, y - 1)) if y > 1
-          tiles.push(lookupTile(x, y + 1)) if y < TILES_DOWN
+addToPlayerScore = (player, atoms) ->
+  scoreElement = $("#playerList li##{player} .score")
+  score = parseInt(scoreElement.text()) + atoms
+  scoreElement.text(score)
+  score
 
-      else
-        tile.data('atoms', atoms).addClass(ATOM_COUNT_TO_CLASS_NAMES[atoms])
+gameOver = ->
+  $('#playerList li:not(.gameOver)').length == 1
 
-      # Update the scores
-      if oldOwner? and oldOwner isnt player
-        oldOwnerPreviousScore = parseInt($("#playerList li##{oldOwner} .score").text())
-        if oldOwnerPreviousScore > 0 && addToPlayerScore(oldOwner, -oldAtoms) == 0
-          playerLost(oldOwner)
-        addToPlayerScore(player, oldAtoms)
+playerLost = (player) ->
+  $("#playerList li##{player}").addClass('gameOver')
 
-  addToPlayerScore = (player, atoms) ->
-    scoreElement = $("#playerList li##{player} .score")
-    score = parseInt(scoreElement.text()) + atoms
-    scoreElement.text(score)
-    score
+playerAlive = (player) ->
+  not $("#playerList li##{player}").hasClass('gameOver')
 
-  gameOver = ->
-    $('#playerList li:not(.gameOver)').length == 1
+activateGame = (game) ->
+  gameData.currentPlayer = game.currentPlayer
+  gameData.players = game.readyPlayers
+  gameData.currentGame = game.id
 
-  playerLost = (player) ->
-    $("#playerList li##{player}").addClass('gameOver')
+  clearGameBoard()
+  clearScoreBoard()
+  drawScoreBoard(game.readyPlayers)
+  drawGameBoard()
 
-  playerAlive = (player) ->
-    not $("#playerList li##{player}").hasClass('gameOver')
+  ss.client.lobby.slideLobby($('#topmenu').outerHeight() + $('#game').outerHeight(true))
+  $('#game').fadeIn()
 
-  activateGame = (game) ->
-    gameData.currentPlayer = game.currentPlayer
-    gameData.players = game.readyPlayers
-    gameData.currentGame = game.id
+lookupTile = (x, y) ->
+  $("#board ol:nth-child(#{y}) li:nth-child(#{x})")
 
-    clearGameBoard()
-    clearScoreBoard()
-    drawScoreBoard(game.readyPlayers)
-    drawGameBoard()
+clearScoreBoard = ->
+  $('#playerList').empty()
 
-    SS.client.lobby.slideLobby($('#topmenu').outerHeight() + $('#game').outerHeight(true))
-    $('#game').fadeIn()
+clearGameBoard = ->
+  $('#board').empty()
 
-  lookupTile = (x, y) ->
-    $("#board ol:nth-child(#{y}) li:nth-child(#{x})")
+drawScoreBoard = (players) ->
+  console.log("Drawing scoreboard ", players)
+  for player in players
+    $('<li>').attr('id', player).append($('<a>').text(player).add($('<span>').addClass('score').text('0'))).appendTo('#playerList')
 
-  clearScoreBoard = ->
-    $('#playerList').empty()
-  
-  clearGameBoard = ->
-    $('#board').empty()
+drawGameBoard = ->
+  board = $('#board')
+  for y in [1..TILES_DOWN]
+    row = $('<ol>').appendTo(board)
+    for x in [1..TILES_ACROSS]
+      $('<li>').data('x', x).data('y', y)
+        .append('<div><img src="/images/blank.gif">')
+        .appendTo(row)
 
-  drawScoreBoard = (players) ->
-    console.log("Drawing scoreboard ", players)
-    for player in players
-      $('<li>').attr('id', player).append($('<a>').text(player).add($('<span>').addClass('score').text('0'))).appendTo('#playerList')
+  $('ol:first-child li:first-child, ol:first-child li:last-child, ol:last-child li:first-child, ol:last-child li:last-child', board)
+      .addClass('corner')
 
-  drawGameBoard = ->
-    board = $('#board')
-    for y in [1..TILES_DOWN]
-      row = $('<ol>').appendTo(board)
-      for x in [1..TILES_ACROSS]
-        $('<li>').data('x', x).data('y', y)
-          .append('<div><img src="/images/blank.gif">')
-          .appendTo(row)
-
-    $('ol:first-child li:first-child, ol:first-child li:last-child, ol:last-child li:first-child, ol:last-child li:last-child', board)
-        .addClass('corner')
-
-    $('ol:first-child li, ol:last-child li, ol li:first-child, ol li:last-child', board)
-        .addClass('edge')
+  $('ol:first-child li, ol:last-child li, ol li:first-child, ol li:last-child', board)
+      .addClass('edge')
