@@ -1,6 +1,5 @@
-redis_ = require('redis-client')
+redis_ = require('redis')
 redis = redis_.createClient()
-redis_.debug_mode = true
 
 # Private functions ##########################################################
 
@@ -14,7 +13,7 @@ withSession = (sessionId, process) =>
     else
       console.warn "Action called on expired session #{sessionId}"
 
-currentHeartbeat = (heartbeatAt) ->
+isCurrentHeartbeat = (heartbeatAt) ->
   heartbeatAt? && (new Date().getTime() - heartbeatAt) < 30000
 
 usersOnline = (response) ->
@@ -23,25 +22,28 @@ usersOnline = (response) ->
     response userNames
 
 pollOnlineUsers = ->
+  console.log("Polling sessions")
   redis.hgetall 'sessions', (error, sessions) =>
+    console.log("Sessions: #{sessions}")
     for sessionId, sessionData of sessions
+      console.log("Polling #{sessionId}")
       session = JSON.parse(sessionData)
-      unless session? && currentHeartbeat session.lastHeartbeatAt
+      unless session? && isCurrentHeartbeat session.lastHeartbeatAt
         console.log "Expiring '#{session.userName}' because they haven't sent a heartbeat in a while"
         redis.hdel 'sessions', sessionId
         redis.hdel 'users', session.userName
-        SS.publish.broadcast 'userTimeout', session.userName
+        ss.publish.broadcast 'userTimeout', session.userName
 
-# Actions #####################################################################
-
-redis.on 'connect', ->
-  console.log("init")
-  redis.del 'users'
-  setInterval (-> pollOnlineUsers()), 1000
+redis.on 'ready', ->
+  console.log("redis ready")
+  redis.del 'sessions'
+  #setInterval pollOnlineUsers, 1000
 
 exports.actions = (request, response, ss) ->
 
   request.use('session')
+
+  # Actions ####################################################################
 
   login: (userName) ->
     console.log "'#{userName}' is attempting to login..."

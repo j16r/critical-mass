@@ -32,4 +32,15 @@ describe 'The lobby', :type => :request do
 
   end
 
+  context 'sending messages' do
+
+    let(:player1_nickname) { 'Tolstoy' }
+    let(:player2_nickname) { 'Churchill' }
+
+  end
+
+  context 'creating games' do
+
+  end
+
 end

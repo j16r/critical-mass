@@ -2,6 +2,8 @@ TILES_ACROSS = 10
 TILES_DOWN = 6
 ATOM_COUNT_TO_CLASS_NAMES = ['zero', 'one', 'two', 'three', 'four']
 
+client = require('/client')
+
 window.gameData =
   currentGame: null
 
@@ -10,15 +12,15 @@ window.gameData =
 ss.event.on 'gameOffer', (game) ->
   console.log "Received a game offer: ", game
   acceptLink = $('<a>').text('Click here to accept.').click ->
-    ss.server.app.acceptGame game.id, ss.client.lobby.currentUser(), (success) ->
+    ss.rpc 'system.acceptGame', game.id, client.currentUser(), (success) ->
 
-  ss.client.lobby.announce($('<span>').text("#{game.host} has offered to play a game with you. ").append(acceptLink), 'gameOffer')
+  client.announce($('<span>').text("#{game.host} has offered to play a game with you. ").append(acceptLink), 'gameOffer')
 
 ss.event.on 'acceptOffer', (player) ->
-  ss.client.lobby.announce("#{player} has accepted the game", 'acceptOffer')
+  client.announce("#{player} has accepted the game", 'acceptOffer')
 
 ss.event.on 'gameBegins', (game, channelName) ->
-  ss.client.lobby.announce('All players have accepted the game', 'gameBegins')
+  client.announce('All players have accepted the game', 'gameBegins')
   activateGame(game)
 
 ss.event.on 'playMove', (move, channelName) ->
@@ -37,13 +39,13 @@ ss.event.on 'playMove', (move, channelName) ->
 
 $('#board li').live 'click', ->
   console.log("Click...")
-  #return if currentPlayerName(gameData.currentPlayer) isnt ss.client.lobby.currentUser()
-  return if gameData.currentPlayer isnt ss.client.lobby.currentUser()
+  #return if currentPlayerName(gameData.currentPlayer) isnt client.currentUser()
+  return if gameData.currentPlayer isnt client.currentUser()
 
   console.log("...", this)
   x = $(this).data('x')
   y = $(this).data('y')
-  ss.server.app.playMove gameData.currentGame, x, y, (success) ->
+  ss.rpc 'system.playMove', gameData.currentGame, x, y, (success) ->
 
 # Functions #################################################################
 
@@ -119,7 +121,7 @@ activateGame = (game) ->
   drawScoreBoard(game.readyPlayers)
   drawGameBoard()
 
-  ss.client.lobby.slideLobby($('#topmenu').outerHeight() + $('#game').outerHeight(true))
+  client.slideLobby($('#topmenu').outerHeight() + $('#game').outerHeight(true))
   $('#game').fadeIn()
 
 lookupTile = (x, y) ->
